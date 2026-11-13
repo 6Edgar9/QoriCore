@@ -5,6 +5,7 @@ package-lock.json
 # Binarios y compilados C++
 paillier_core
 paillier_core.exe
+qoricore_server
 *.o
 *.obj
 *.so

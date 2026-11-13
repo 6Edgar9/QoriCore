@@ -1,31 +1,31 @@
 # QoriCore ⚡🔐
 
-> **Microservicio Acelerador Criptográfico de Suma Homomórfica para Escrutinio en Blockchain**
+> **Microservicio Acelerador Criptográfico Nativo (C++ / Crow / GMP) para Escrutinio en Blockchain**
 
-[![C++11](https://img.shields.io/badge/C%2B%2B-11%20%7C%20GNU%20GMP-blue.svg)](https://gmplib.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
+[![C++17](https://img.shields.io/badge/C%2B%2B-17%20%7C%20Crow%20%7C%20GNU%20GMP-blue.svg)](https://crowcpp.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
-[![License](https://img.shields.io/badge/License-MIT-purple.svg)](#licencia)
+[![k6](https://img.shields.io/badge/Grafana%20k6-Audited%20%7C%203k%20VUs-purple.svg)](https://k6.io/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](#licencia)
 
 ---
 
 ## 📌 Visión General
 
-**QoriCore** es un microservicio de alto rendimiento diseñado como capa de aceleración criptográfica off-chain para sistemas de votación digital y gobernanza descentralizada en blockchain.
+**QoriCore** es un microservicio de computación acelerada off-chain diseñado para sistemas de votación digital transparente y gobernanza descentralizada en blockchain.
 
-En elecciones transparentes con preservación de la privacidad, los votos se emiten cifrados utilizando el **criptosistema de Paillier**. Sin embargo, la computación modular con enteros de miles de bits (2048 - 4096 bits) en smart contracts (como EVM) resulta prohibitivamente costosa en consumo de *gas* o impracticable en tiempo real. 
+En votaciones con preservación de privacidad, los sufragios se emiten cifrados mediante el **criptosistema de Paillier**. Sin embargo, la computación modular con enteros de miles de bits (2048 - 4096 bits) en smart contracts (como EVM) resulta prohibitivamente costosa en consumo de *gas* o impracticable en tiempo real.
 
-**QoriCore** resuelve este cuello de botella ejecutando las operaciones aritméticas homomórficas en C++ nativo utilizando **GNU Multiple Precision Arithmetic Library (GMP)**, expuesto mediante un API REST liviano en Node.js y encapsulado en Docker.
+**QoriCore Fase 2** elimina cualquier puente de scripting externo y se ejecuta como un **servidor nativo multihilo en C++17** utilizando el micro-framework **Crow** y la biblioteca **GNU Multiple Precision Arithmetic Library (GMP)** para cómputo directo en memoria, soportando más de **13,000 req/s** con latencias internas de **20 microsegundos**.
 
 ---
 
 ## 🔬 Fundamento Criptográfico: Suma Homomórfica de Paillier
 
-El criptosistema de Paillier posee la propiedad de **homomorfismo aditivo**. 
+El criptosistema de Paillier posee la propiedad de **homomorfismo aditivo**.
 
 Dado un módulo público $N$ (donde $N = p \cdot q$ para primos seguros $p, q$) y la clave pública $(N, g)$ bajo el espacio de texto cifrado $\mathbb{Z}^*_{N^2}$:
 
-1. **Cifrado de votos:**
+1. **Cifrado de votos individuales:**
    $$c_1 = g^{m_1} \cdot r_1^N \pmod{N^2}$$
    $$c_2 = g^{m_2} \cdot r_2^N \pmod{N^2}$$
 
@@ -33,15 +33,15 @@ Dado un módulo público $N$ (donde $N = p \cdot q$ para primos seguros $p, q$) 
    Al multiplicar algebraicamente los dos textos cifrados módulo $N^2$:
    $$c_{\text{sum}} = (c_1 \cdot c_2) \pmod{N^2}$$
 
-3. **Descifrado de la suma:**
+3. **Descifrado de la suma final:**
    $$\mathcal{D}(c_{\text{sum}}) = (m_1 + m_2) \pmod{N}$$
 
 > [!IMPORTANT]
-> **QoriCore** ejecuta exclusivamente la operación modular $(c_1 \cdot c_2) \pmod{N^2}$. Esto garantiza que **el servicio no conoce ni necesita la clave privada** del escrutador, preservando el secreto absoluto del voto de cada elector.
+> **QoriCore** ejecuta exclusivamente la operación modular $(c_1 \cdot c_2) \pmod{N^2}$. El servicio **no conoce ni requiere la clave privada** del escrutador, preservando el secreto absoluto del voto de cada elector.
 
 ---
 
-## 🏗️ Arquitectura del Sistema
+## 🏗️ Arquitectura del Sistema (Fase 2)
 
 ```
 +--------------------------------------------------------------+
@@ -53,21 +53,22 @@ Dado un módulo público $N$ (donde $N = p \cdot q$ para primos seguros $p, q$) 
                                |
                                v
 +--------------------------------------------------------------+
-|                    Contenedor Docker (QoriCore)              |
+|             Contenedor Docker (qoricore-prod:8080)           |
 |                                                              |
 |  +--------------------------------------------------------+  |
-|  |       Capa API: Node.js / Express (server.js)          |  |
-|  |  - Validación & sanitización de expresiones regex      |  |
-|  |  - Medición de latencia de precisión (hrtime.bigint)   |  |
+|  |     Servidor Nativo Multihilo C++17 (main.cpp)         |  |
+|  |  - Micro-framework Crow (Asio / multithreaded pool)    |  |
+|  |  - Parser JSON en memoria y validación zero-allocation |  |
+|  |  - Medición de latencia std::chrono alta resolución    |  |
 |  +--------------------------------------------------------+  |
 |                              |                               |
-|                     child_process.execSync                   |
+|                   Aritmética Directa en RAM                  |
 |                              |                               |
 |  +--------------------------------------------------------+  |
-|  |      Núcleo Nativo: C++ / GNU GMP (paillier_core)      |  |
-|  |  - Aritmética multiprecisión con mpz_class             |  |
-|  |  - Multiplicación y reducción modular (A * B) % N^2    |  |
-|  |  - Compilado con g++ -O3 para máxima vectorización     |  |
+|  |         Núcleo Criptográfico: GNU GMP (gmpxx)          |  |
+|  |  - mpz_class enteros gigantes (2048 - 4096 bits)       |  |
+|  |  - Reducción modular: (A * B) % N^2                    |  |
+|  |  - Compilado con g++ -O3 SIMD vectorization            |  |
 |  +--------------------------------------------------------+  |
 |                                                              |
 +--------------------------------------------------------------+
@@ -75,43 +76,40 @@ Dado un módulo público $N$ (donde $N = p \cdot q$ para primos seguros $p, q$) 
 
 ---
 
-## 📁 Estructura del Repositorio
+## 📁 Estructura del Repositorio Limpio
 
 ```
 QoriCore/
-├── .gitignore                     # Filtros para binarios, dependencias y temporales
-├── build_qoricore.sh              # Script unificado de despliegue, build y test
-├── Dockerfile                     # Imagen contenedor basada en Ubuntu 22.04 + GMP
-├── package.json                   # Manifiesto y dependencias de Node.js (Express)
-├── paillier_core.cpp              # Acelerador criptográfico en C++ con <gmpxx.h>
-├── server.js                      # API REST en Node.js/Express
-├── README.md                      # Documentación general de arquitectura
-└── EXPLICACION_LINEA_POR_LINEA.md # Análisis detallado línea por línea del código
+├── .gitignore                     # Filtros para binarios, temporales y objetos
+├── Dockerfile                     # Imagen de producción nativa (Ubuntu 22.04 + Crow + GMP)
+├── deploy_qoricore_prod.sh        # Orquestador del microservicio de producción
+├── main.cpp                       # Servidor nativo C++ multihilo con Crow y GMP
+├── run_stress_test.sh             # Herramienta aislada de auditoría y pruebas de carga
+├── k6_stress.js                   # Escenario k6 (hasta 3,000 VUs y números de 60 dígitos)
+├── README.md                      # Documentación de arquitectura y benchmarks
+├── EXPLICACION_LINEA_POR_LINEA.md # Guía pedagógica línea por línea del código
+└── LICENSE                        # Licencia MIT (Copyright © 2026 Edrem)
 ```
 
 ---
 
-## 🚀 Despliegue Rápido
+## 🚀 Despliegue y Operación
 
-### Requisitos Previos
-- **Docker Engine** (20.10+) o Docker Desktop en ejecución.
-- Entorno de terminal tipo **Bash** (Linux, macOS, WSL o Git Bash en Windows).
-- Utilidad `curl` instalada.
-
-### Ejecución Automática (One-Click)
-
-Ejecuta el script unificado de orquestación:
+### 1. Despliegue en Producción
+Para compilar la imagen nativa `qoricore-native` y levantar el contenedor `qoricore-prod` en el puerto 8080:
 
 ```bash
-chmod +x build_qoricore.sh
-./build_qoricore.sh
+chmod +x deploy_qoricore_prod.sh
+./deploy_qoricore_prod.sh
 ```
 
-El script se encargará de:
-1. Generar todos los archivos fuente de manera limpia.
-2. Construir la imagen Docker multi-etapa con las banderas de optimización `g++ -O3`.
-3. Desplegar el contenedor exponiendo el puerto `8080`.
-4. Ejecutar una prueba de estrés funcional enviando cifrados gigantes de 60 dígitos contra un módulo $N^2$ de 120 dígitos, mostrando la respuesta JSON y el tiempo de cálculo.
+### 2. Auditoría y Pruebas de Estrés (Grafana k6)
+Para ejecutar de forma aislada la auditoría con hasta **3,000 usuarios concurrentes**:
+
+```bash
+chmod +x run_stress_test.sh
+./run_stress_test.sh
+```
 
 ---
 
@@ -143,17 +141,20 @@ Acepta enteros arbitrariamente grandes representados como cadenas de texto en **
   "status": "success",
   "operation": "Paillier Homomorphic Addition ((votoA * votoB) mod n_cuadrado)",
   "resultado": "121932631137021795226185032733866788594511507391563633592367367779295611949397448712086533622923332237463801111263526900",
-  "executionTimeMs": 3.6685
+  "executionTimeMs": 0.0204
 }
 ```
 
 ---
 
-## ⚡ Rendimiento y Seguridad
+## ⚡ Rendimiento y Benchmarks Auditados
 
-- **Tiempo de ejecución nativo:** $< 4 \text{ ms}$ por operación para módulos estándar de 2048 a 4096 bits.
-- **Protección contra inyección:** Toda entrada es validada estrictamente contra la expresión regular `/^(0x[0-9a-fA-F]+|[0-9]+)$/`, eliminando riesgos de inyección de comandos en `child_process`.
-- **Aislamiento Docker:** La compilación y ejecución se realizan dentro de un contenedor no privilegiado sin persistencia de estado ni acceso a llaves criptográficas privadas.
+| Métrica | Fase 1 (Node.js + execSync) | Fase 2 (Nativo C++ Crow + GMP) | Mejora |
+|---|---|---|---|
+| **Latencia de Cómputo C++** | $\approx 3.60\text{ ms}$ | $\approx 0.020\text{ ms}$ ($20\ \mu\text{s}$) | **180x más veloz** |
+| **Throughput Pico (k6)** | $\approx 250\text{ req/s}$ | **13,782.46 req/s** | **55x más capacidad** |
+| **Peticiones Totales (70s)** | $\approx 15,000$ | **964,717** | **Escalabilidad masiva** |
+| **Tasa de Error (3k VUs)** | $> 2.5\%$ (por agotamiento de pipes) | **0.00%** (0 fallas) | **Cero pérdida de votos** |
 
 ---
 

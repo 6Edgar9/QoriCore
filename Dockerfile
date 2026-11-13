@@ -2,28 +2,30 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Instalar g++, make, libgmp-dev, nodejs, npm y curl
+# Instalación de compilador, librerías criptográficas y cabeceras Asio/Boost
 RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     make \
     libgmp-dev \
-    nodejs \
-    npm \
+    libasio-dev \
+    libboost-dev \
+    wget \
+    ca-certificates \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Instalar dependencias de producción de Node.js
-COPY package*.json ./
-RUN npm install --omit=dev
+# Descarga de la cabecera amalgamada oficial de Crow (v1.0+5)
+RUN wget -q https://github.com/CrowCpp/Crow/releases/download/v1.0+5/crow_all.h -O /usr/local/include/crow_all.h \
+    && cp /usr/local/include/crow_all.h /app/crow_all.h
 
-# Copiar fuentes
-COPY paillier_core.cpp server.js ./
+# Copiar el código fuente
+COPY main.cpp ./
 
-# Compilar binario C++ optimizado con flags vectoriales y O3
-RUN g++ -O3 paillier_core.cpp -lgmpxx -lgmp -o paillier_core && chmod +x paillier_core
+# Compilación con soporte C++17, nivel O3, multihilo y enlace con GNU GMP
+RUN g++ -std=c++17 -O3 main.cpp -lgmpxx -lgmp -lpthread -o qoricore_server && chmod +x qoricore_server
 
 EXPOSE 8080
 
-CMD ["node", "server.js"]
+CMD ["./qoricore_server"]
